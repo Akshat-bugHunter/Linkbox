@@ -123,3 +123,36 @@ jobs:
           build-args: VITE_API_URL=${{ vars.VITE_API_URL }}
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
+
+  deploy:
+    needs: docker-integration-test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_TARGET: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copy compose file
+        run: |
+          ssh "$SSH_TARGET" "mkdir -p ~/linkbox-app"
+          scp docker-compose.prod.yml "$SSH_TARGET:~/linkbox-app/docker-compose.yml"
+
+      - name: Deploy
+        run: |
+          REPO="${GITHUB_REPOSITORY,,}"
+          echo "$GH_TOKEN" | ssh "$SSH_TARGET" "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+          ssh "$SSH_TARGET" "cd ~/linkbox-app && printf 'POSTGRES_PASSWORD=%s\nREPO=%s\n' '$POSTGRES_PASSWORD' '$REPO' > .env && chmod 600 .env && docker compose pull && docker compose up -d && docker image prune -f && docker compose ps"

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+const BASE_URL = import.meta.env.VITE_API_URL ?? '';
+
 export default function App() {
   const [items, setItems] = useState([]);
   const [source, setSource] = useState('');
@@ -8,7 +10,7 @@ export default function App() {
   const [error, setError] = useState('');
 
   async function load() {
-    const res = await fetch('/api/bookmarks');
+    const res = await fetch(`${BASE_URL}/api/bookmarks`);
     const json = await res.json();
     setItems(json.data || []);
     setSource(json.source || '');
@@ -21,26 +23,31 @@ export default function App() {
   async function add(e) {
     e.preventDefault();
     setError('');
-    const res = await fetch('/api/bookmarks', {
+
+    const res = await fetch(`${BASE_URL}/api/bookmarks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, url }),
     });
+
     if (!res.ok) {
       const j = await res.json();
       return setError(j.error || 'Failed');
     }
+
     setTitle('');
     setUrl('');
     load();
   }
 
   async function remove(id) {
-    await fetch(`/api/bookmarks/${id}`, { method: 'DELETE' });
+    await fetch(`${BASE_URL}/api/bookmarks/${id}`, {
+      method: 'DELETE',
+    });
     load();
   }
 
-  return (
+ return (
     <div className="wrap">
       <h1>LinkBox</h1>
       <p className="sub">Save links. Served from: <b>{source || '...'}</b></p>
